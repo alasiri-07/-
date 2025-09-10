@@ -847,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmationCallback = null;
     });
 
-    // --- Drag and Drop Handlers ---
+    // --- Drag and Drop Handlers (Mouse) ---
     let draggedTaskId = null;
     taskListContainer.addEventListener('dragstart', (e) => {
         if (e.target.classList.contains('task')) {
@@ -870,15 +870,13 @@ document.addEventListener('DOMContentLoaded', () => {
             taskListContainer.insertBefore(draggable, afterElement);
         }
     });
-
     taskListContainer.addEventListener('drop', (e) => {
         e.preventDefault();
-        const taskElements = [...taskListContainer.querySelectorAll('.task:not(.dragging)')];
-        const newOrderedIds = taskElements.map(el => parseInt(el.dataset.taskId));
-        const afterElement = getDragAfterElement(taskListContainer, e.clientY);
-        const droppedIndex = afterElement ? newOrderedIds.indexOf(parseInt(afterElement.dataset.taskId)) : newOrderedIds.length;
-        newOrderedIds.splice(droppedIndex, 0, draggedTaskId);
+        if (!draggedTaskId) return;
 
+        const taskElements = [...taskListContainer.querySelectorAll('.task')];
+        const newOrderedIds = taskElements.map(el => parseInt(el.dataset.taskId));
+        
         newOrderedIds.forEach((id, index) => {
             const task = state.tasks.find(t => t.id === id);
             if (task) task.order = index;
@@ -901,6 +899,47 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, { offset: Number.NEGATIVE_INFINITY }).element;
     }
+
+    // --- Touch Drag and Drop Handlers ---
+    let draggingElement = null;
+    taskListContainer.addEventListener('touchstart', (e) => {
+        const targetTask = e.target.closest('.task');
+        if (targetTask) {
+            draggingElement = targetTask;
+            draggingElement.classList.add('dragging');
+        }
+    });
+    taskListContainer.addEventListener('touchmove', (e) => {
+        if (!draggingElement) return;
+        
+        e.preventDefault(); // Prevent scroll when dragging an element
+
+        const touch = e.touches[0];
+        const afterElement = getDragAfterElement(taskListContainer, touch.clientY);
+
+        if (afterElement == null) {
+            taskListContainer.appendChild(draggingElement);
+        } else {
+            taskListContainer.insertBefore(draggingElement, afterElement);
+        }
+    }, { passive: false }); // Necessary for preventDefault to work
+    taskListContainer.addEventListener('touchend', (e) => {
+        if (!draggingElement) return;
+
+        draggingElement.classList.remove('dragging');
+
+        const taskElements = [...taskListContainer.querySelectorAll('.task')];
+        const newOrderedIds = taskElements.map(el => parseInt(el.dataset.taskId));
+        
+        newOrderedIds.forEach((id, index) => {
+            const task = state.tasks.find(t => t.id === id);
+            if (task) task.order = index;
+        });
+        
+        saveData();
+        render(); 
+        draggingElement = null;
+    });
 
 
     // --- Import / Export Handlers ---
@@ -995,21 +1034,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // --- SERVICE WORKER REGISTRATION ---
-    const registerServiceWorker = () => {
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js') // Assuming sw.js in the same directory
-                    .then(registration => {
-                        console.log('ServiceWorker registered successfully.');
-                    })
-                    .catch(error => {
-                        console.log('ServiceWorker registration failed: ', error);
-                    });
-            });
-        }
-    };
-    
     // --- INITIALIZATION ---
     const init = () => {
         loadData();
@@ -1020,9 +1044,6 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
         requestNotificationPermission();
         setInterval(checkTaskNotifications, 60000); 
-        // Cannot register service worker from blob URL in some environments, so this is disabled for full compatibility.
-        // It's better to have a separate sw.js file if possible.
-        // registerServiceWorker(); 
     };
     
     init();
