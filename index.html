@@ -68,14 +68,6 @@
             font-size: 1.5rem;
             text-align: center;
         }
-        /* Styles for drag and drop */
-        .task.dragging {
-            opacity: 0.5;
-            background: #0891b2;
-        }
-        .task.drag-over {
-            border-top: 2px solid #06b6d4;
-        }
     </style>
 </head>
 <body class="transition-colors duration-300">
@@ -459,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const render = () => {
         updateActiveNav();
         viewTitle.textContent = VIEW_TITLES[state.currentView];
+        
         ['dashboardView', 'taskList', 'habitGrid', 'searchFilterContainer'].forEach(elId => document.getElementById(elId).classList.add('hidden'));
 
         switch (state.currentView) {
@@ -567,19 +560,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        filteredTasks.sort((a, b) => (a.order || 0) - (b.order || 0) || new Date(a.dueDate) - new Date(b.dueDate)).forEach(task => {
+        // Sort by due date as a fallback if order is not set
+        filteredTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).forEach(task => {
             const category = state.categories.find(c => c.id === task.categoryId) || {};
             const priorityClass = getPriorityStyles(task.priority);
             const taskElement = document.createElement('div');
             taskElement.className = `task bg-white dark:bg-gray-800 p-4 rounded-lg flex items-start gap-4 border-s-4 ${priorityClass} ${task.completed ? 'opacity-50' : ''}`;
-            taskElement.setAttribute('draggable', true);
             taskElement.dataset.taskId = task.id;
             
             const dueDateText = new Date(task.dueDate).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long'});
             const completedSubtasks = (task.subtasks || []).filter(st => st.completed).length;
             const subtaskProgress = (task.subtasks || []).length > 0 ? (completedSubtasks / task.subtasks.length) * 100 : 0;
             taskElement.innerHTML = `
-                <div class="flex-shrink-0 pt-1 cursor-grab" style="color: ${category.color || '#fff'};">${ICONS[category.icon] || ICONS.briefcase}</div>
+                <div class="flex-shrink-0 pt-1" style="color: ${category.color || '#fff'};">${ICONS[category.icon] || ICONS.briefcase}</div>
                 <div class="flex-grow">
                     <p class="font-semibold ${task.completed ? 'line-through' : ''}">${task.name}</p>
                     <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -682,6 +675,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- EVENT HANDLERS ---
+    
+    // FIX: Re-added the missing navigation event listener
+    navButtons.forEach(btn => btn.addEventListener('click', () => { 
+        state.currentView = btn.dataset.view; 
+        render(); 
+    }));
+
     taskForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = document.getElementById('taskId').value;
@@ -847,101 +847,6 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmationCallback = null;
     });
 
-    // --- Drag and Drop Handlers (Mouse) ---
-    let draggedTaskId = null;
-    taskListContainer.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('task')) {
-            draggedTaskId = parseInt(e.target.dataset.taskId);
-            e.target.classList.add('dragging');
-        }
-    });
-    taskListContainer.addEventListener('dragend', (e) => {
-        if (e.target.classList.contains('task')) {
-            e.target.classList.remove('dragging');
-        }
-    });
-    taskListContainer.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const afterElement = getDragAfterElement(taskListContainer, e.clientY);
-        const draggable = document.querySelector('.dragging');
-        if (afterElement == null) {
-            taskListContainer.appendChild(draggable);
-        } else {
-            taskListContainer.insertBefore(draggable, afterElement);
-        }
-    });
-    taskListContainer.addEventListener('drop', (e) => {
-        e.preventDefault();
-        if (!draggedTaskId) return;
-
-        const taskElements = [...taskListContainer.querySelectorAll('.task')];
-        const newOrderedIds = taskElements.map(el => parseInt(el.dataset.taskId));
-        
-        newOrderedIds.forEach((id, index) => {
-            const task = state.tasks.find(t => t.id === id);
-            if (task) task.order = index;
-        });
-        
-        saveData();
-        render();
-        draggedTaskId = null;
-    });
-
-    function getDragAfterElement(container, y) {
-        const draggableElements = [...container.querySelectorAll('.task:not(.dragging)')];
-        return draggableElements.reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = y - box.top - box.height / 2;
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
-            } else {
-                return closest;
-            }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
-
-    // --- Touch Drag and Drop Handlers ---
-    let draggingElement = null;
-    taskListContainer.addEventListener('touchstart', (e) => {
-        const targetTask = e.target.closest('.task');
-        if (targetTask) {
-            draggingElement = targetTask;
-            draggingElement.classList.add('dragging');
-        }
-    });
-    taskListContainer.addEventListener('touchmove', (e) => {
-        if (!draggingElement) return;
-        
-        e.preventDefault(); // Prevent scroll when dragging an element
-
-        const touch = e.touches[0];
-        const afterElement = getDragAfterElement(taskListContainer, touch.clientY);
-
-        if (afterElement == null) {
-            taskListContainer.appendChild(draggingElement);
-        } else {
-            taskListContainer.insertBefore(draggingElement, afterElement);
-        }
-    }, { passive: false }); // Necessary for preventDefault to work
-    taskListContainer.addEventListener('touchend', (e) => {
-        if (!draggingElement) return;
-
-        draggingElement.classList.remove('dragging');
-
-        const taskElements = [...taskListContainer.querySelectorAll('.task')];
-        const newOrderedIds = taskElements.map(el => parseInt(el.dataset.taskId));
-        
-        newOrderedIds.forEach((id, index) => {
-            const task = state.tasks.find(t => t.id === id);
-            if (task) task.order = index;
-        });
-        
-        saveData();
-        render(); 
-        draggingElement = null;
-    });
-
-
     // --- Import / Export Handlers ---
     exportDataBtn.addEventListener('click', () => {
         const dataStr = JSON.stringify(state, null, 2);
@@ -1011,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // --- Other Event Listeners ---
-    addBtn.addEventListener('click', () => {
+     addBtn.addEventListener('click', () => {
         if (state.currentView === 'habits') {
             habitForm.reset();
             document.getElementById('habitId').value = '';
@@ -1033,6 +938,22 @@ document.addEventListener('DOMContentLoaded', () => {
             openModal(taskModal);
         }
     });
+
+    themeToggleBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.theme = isDark ? 'dark' : 'light';
+        updateThemeIcons();
+    });
+
+    closeModalBtn.addEventListener('click', () => closeModal(taskModal));
+    statsBtn.addEventListener('click', () => { /* renderStats(); */ openModal(statsModal); });
+    closeStatsModalBtn.addEventListener('click', () => closeModal(statsModal));
+    addCategoryBtn.addEventListener('click', () => openModal(categoryModal));
+    closeCategoryModalBtn.addEventListener('click', () => closeModal(categoryModal));
+    closeHabitModalBtn.addEventListener('click', () => closeModal(habitModal));
+    closeHabitDetailsModalBtn.addEventListener('click', () => closeModal(habitDetailsModal));
+    settingsBtn.addEventListener('click', () => openModal(settingsModal));
+    closeSettingsModalBtn.addEventListener('click', () => closeModal(settingsModal));
     
     // --- INITIALIZATION ---
     const init = () => {
