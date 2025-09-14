@@ -6,7 +6,7 @@
     <title>مُنظِّم المهام</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogItmF2LPYqtik2YjZhiDYqtithdmK2YciLAogICJzaG9ydF9uYW1lIjogItiq2KfYsNinIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMTE4MjciLAogICJ0aGVtZV9jb2xvciI6ICIjM2I4MmY2IiwKICAiZGVzY3JpcHRpb24iOiAi2LnZhNmK2LEg2YTZitmEINiq2KfYsNinINm22YbZitmEINiq2KfYudiqIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9wbGFjZWhvbGQuY28vMTkyeDE5Mi80YTkwZTIvZmZmZmZmP3RleHQ9VGFza3MiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9wbGFjZWhvbGQuY28vNTEyeDUxMi80YTkwZTIvZmZmZmZmP3RleHQ9VGFza3MiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIKICAgIH0KICBdCn0=">
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogItmF2LPYqtik2YjZhiDYqtithdmK2YciLAogICJzaG9ydF9uYW1lIjogItiq2KfYsNinIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMTE4MjciLAogICJ0aGVtZV9jb2xvciI6ICIjM2I4MmY2IiwKICAiZGVzY3JpcHRpb24iOiAi2LnZhNmK2LEg2YTZitmEINiq2KfYsNinINm22YbZitmEINiq2KfYudiqIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9wbGFjZWhvbGQuY8O / MTkyeDE5Mi80YTkwZTIvZmZmZmZmP3RleHQ9VGFza3MiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9wbGFjZWhvbGQuY8O / NTYyeDUxMi80YTkwZTIvZmZmZmZmP3RleHQ9VGFza3MiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIKICAgIH0KICBdCn0=">
     <meta name="theme-color" content="#4a90e2">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -140,6 +140,7 @@
                 this.attachEventListeners();
                 this.render();
                 this.applyTheme();
+                this.boundHabitClickHandler = this.handleHabitClick.bind(this);
             },
 
             loadState() {
@@ -193,34 +194,37 @@
                 });
                 
                 document.getElementById('dashboard-view').addEventListener('click', e => {
-                    // Handle task completion
                     const taskCheckbox = e.target.closest('.dashboard-task-item .task-checkbox');
                     if (taskCheckbox) {
                         const taskItem = taskCheckbox.closest('.dashboard-task-item');
                         const taskId = taskItem.dataset.taskId;
-                        this.toggleTaskCompletion(taskId); // This will only update state
-                        taskItem.remove(); // Instantly remove from dashboard view for responsiveness
+                        this.toggleTaskCompletion(taskId);
+                        taskItem.remove();
                         return;
                     }
 
-                    // Handle habit completion
                     const habitItem = e.target.closest('.dashboard-habit-item');
                     if (!habitItem) return;
                     const habitId = habitItem.dataset.habitId;
+                    const habitType = habitItem.dataset.habitType;
                     let updatedHabit = null;
+                    const today = new Date().toISOString().split('T')[0];
 
-                    const subHabitLabel = e.target.closest('.subhabit-label');
-                    if (subHabitLabel) {
-                        updatedHabit = this.toggleSubHabit(habitId, subHabitLabel.dataset.subhabitId);
-                    }
-
-                    const completeHabitLabel = e.target.closest('.complete-habit-label');
-                    if (completeHabitLabel) {
-                        updatedHabit = this.toggleSimpleHabit(habitId);
+                    if (habitType === 'counter') {
+                        const btn = e.target.closest('.add-habit-log-btn-dash');
+                        if (btn) {
+                            const subHabitId = btn.dataset.subhabitId;
+                            updatedHabit = this.logHabitTimestamp(habitId, subHabitId);
+                        }
+                    } else { // daily
+                        if (e.target.closest('.subhabit-label')) {
+                            updatedHabit = this.toggleSubHabit(habitId, e.target.closest('.subhabit-label').dataset.subhabitId);
+                        } else if (e.target.closest('.complete-habit-label')) {
+                            updatedHabit = this.toggleSimpleHabit(habitId);
+                        }
                     }
 
                     if (updatedHabit) {
-                        const today = new Date().toISOString().split('T')[0];
                         habitItem.outerHTML = this.renderDashboardHabitItem(updatedHabit, today);
                     }
                 });
@@ -268,10 +272,44 @@
             },
 
             renderDashboardHabitItem(habit, today) {
+                if (habit.type === 'counter') {
+                    const todayCount = (habit.log || [])
+                        .filter(entry => new Date(entry.timestamp).toISOString().split('T')[0] === today)
+                        .length;
+                    
+                    let completionControl;
+                    if(habit.subHabits && habit.subHabits.length > 0) {
+                        completionControl = `<div class="mt-2 space-y-1">
+                            ${habit.subHabits.map(sh => `
+                                <div class="flex items-center justify-between p-1.5 bg-secondary-bg/50 dark:bg-primary-bg/50 rounded-md">
+                                    <span class="text-sm">${sh.title}</span>
+                                    <button class="add-habit-log-btn-dash w-7 h-7 bg-accent-color text-accent-text rounded-full flex items-center justify-center text-lg font-light shadow hover:bg-opacity-80" data-subhabit-id="${sh.id}">+</button>
+                                </div>
+                            `).join('')}
+                        </div>`;
+                    } else {
+                        completionControl = `<button class="add-habit-log-btn-dash w-10 h-10 bg-accent-color text-accent-text rounded-full flex items-center justify-center text-2xl font-light shadow hover:bg-opacity-80">+</button>`;
+                    }
+
+                    return `
+                        <div class="dashboard-habit-item bg-primary-bg p-3 rounded-lg" data-habit-id="${habit.id}" data-habit-type="counter">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-semibold">${habit.title}</p>
+                                    <p class="text-xs text-secondary-text">مرات اليوم: ${todayCount}</p>
+                                </div>
+                                ${habit.subHabits && habit.subHabits.length > 0 ? '' : completionControl}
+                            </div>
+                             ${habit.subHabits && habit.subHabits.length > 0 ? completionControl : ''}
+                        </div>
+                    `;
+                }
+
+                // Logic for 'daily' type habits
                 const todayLog = habit.log ? habit.log[today] || {} : {};
                 let completionControl;
 
-                if (habit.subHabits.length > 0) {
+                if (habit.subHabits && habit.subHabits.length > 0) {
                      completionControl = `<div class="mt-2 space-y-1">${habit.subHabits.map(sh => `
                         <label class="subhabit-label flex items-center gap-2 p-1 rounded-md hover:bg-primary-bg cursor-pointer" data-subhabit-id="${sh.id}">
                             <input type="checkbox" class="h-4 w-4 rounded text-accent-color focus:ring-accent-color" ${todayLog[sh.id] ? 'checked' : ''}>
@@ -288,7 +326,7 @@
                 }
 
                 return `
-                    <div class="dashboard-habit-item bg-primary-bg p-2 rounded-lg" data-habit-id="${habit.id}">
+                    <div class="dashboard-habit-item bg-primary-bg p-2 rounded-lg" data-habit-id="${habit.id}" data-habit-type="daily">
                         <p class="font-semibold">${habit.title}</p>
                         ${completionControl}
                     </div>
@@ -405,8 +443,6 @@
                 }
 
                 if (updatedTask) {
-                    // If a status filter is active, a full render is safer to ensure items hide/show correctly.
-                    // Otherwise, a targeted replacement is much faster.
                     if (this.state.filter.tasks.status !== 'all') {
                         this.renderTasks();
                     } else {
@@ -520,13 +556,19 @@
                         <button id="add-habit-btn" class="bg-accent-color text-accent-text px-4 py-2 rounded-lg hover:bg-opacity-80 transition-colors flex items-center gap-2"><i class="fas fa-plus"></i> إضافة عادة</button>
                     </div>
                     <div class="space-y-4">
-                        ${this.state.habits.length > 0 ? this.state.habits.map(habit => this.renderHabitItem(habit)).join('') : '<p class="text-secondary-text text-center py-8">ليس لديك عادات لتتبعها بعد. ابدأ بإضافة واحدة!</p>'}
+                        ${this.state.habits.length > 0 ? this.state.habits.map(habit => 
+                            habit.type === 'counter' ? this.renderCounterHabitItem(habit) : this.renderDailyHabitItem(habit)
+                        ).join('') : '<p class="text-secondary-text text-center py-8">ليس لديك عادات لتتبعها بعد. ابدأ بإضافة واحدة!</p>'}
                     </div>`;
                 document.getElementById('add-habit-btn').addEventListener('click', () => this.showHabitModal());
-                document.getElementById('habits-view').addEventListener('click', e => this.handleHabitClick(e));
+                const habitsView = document.getElementById('habits-view');
+                habitsView.removeEventListener('click', this.boundHabitClickHandler);
+                habitsView.removeEventListener('change', this.boundHabitClickHandler);
+                habitsView.addEventListener('click', this.boundHabitClickHandler);
+                habitsView.addEventListener('change', this.boundHabitClickHandler);
             },
-
-            renderHabitItem(habit) {
+            
+            renderDailyHabitItem(habit) {
                 const today = new Date().toISOString().split('T')[0];
                 const todayLog = habit.log ? habit.log[today] || {} : {};
                 const completedSubHabits = habit.subHabits.filter(sh => todayLog[sh.id]).length;
@@ -551,7 +593,7 @@
                 }
 
                 return `
-                <div class="habit-item bg-secondary-bg p-4 rounded-lg shadow-sm" data-habit-id="${habit.id}">
+                <div class="habit-item bg-secondary-bg p-4 rounded-lg shadow-sm" data-habit-id="${habit.id}" data-habit-type="daily">
                     <div class="flex justify-between items-start mb-3">
                         <div><h3 class="font-bold text-lg">${habit.title}</h3><p class="text-sm text-secondary-text">${habit.description}</p></div>
                         <div class="flex items-center gap-3 text-secondary-text">
@@ -567,29 +609,173 @@
                     <p class="text-xs text-secondary-text mt-3 text-left">إجمالي الإنجازات: ${totalCompletions}</p>
                 </div>`;
             },
+            
+            renderCounterHabitItem(habit, filter = 'this-month') {
+                const logEntries = (habit.log || []).map(entry => ({ 
+                    date: new Date(entry.timestamp), 
+                    subHabitId: entry.subHabitId 
+                }));
+                const now = new Date();
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1)); // Adjust for week starting on Monday
+                startOfWeek.setHours(0, 0, 0, 0);
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+                let filteredTimestamps = [];
+                let title = "";
+                
+                if (filter === 'this-week') {
+                    title = "هذا الأسبوع";
+                    filteredTimestamps = logEntries.filter(t => t.date >= startOfWeek);
+                } else if (filter === 'this-month') {
+                    title = "هذا الشهر";
+                    filteredTimestamps = logEntries.filter(t => t.date >= startOfMonth);
+                } else if (filter === 'all-time') {
+                    title = "كل الأوقات";
+                    filteredTimestamps = logEntries;
+                } else {
+                    const [year, month] = filter.split('-').map(Number);
+                    const start = new Date(year, month - 1, 1);
+                    const end = new Date(year, month, 1);
+                    const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+                    title = `${monthNames[month - 1]} ${year}`;
+                    filteredTimestamps = logEntries.filter(t => t.date >= start && t.date < end);
+                }
+
+                const totalCount = filteredTimestamps.length;
+                const countThisWeek = logEntries.filter(t => t.date >= startOfWeek).length;
+                const countThisMonth = logEntries.filter(t => t.date >= startOfMonth).length;
+
+                const monthOptions = new Set();
+                logEntries.forEach(t => {
+                    monthOptions.add(`${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`);
+                });
+                
+                const sortedMonthOptions = Array.from(monthOptions).sort().reverse();
+                const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+
+                 let mainContent;
+                if (habit.subHabits && habit.subHabits.length > 0) {
+                    mainContent = `
+                    <div class="col-span-1 md:col-span-2 space-y-3">
+                        ${habit.subHabits.map(sh => {
+                            const subHabitTotalCount = logEntries.filter(entry => entry.subHabitId === sh.id).length;
+                            return `
+                            <div class="flex justify-between items-center p-3 bg-primary-bg rounded-lg">
+                                <div>
+                                    <p class="font-semibold">${sh.title}</p>
+                                    <p class="text-xs text-secondary-text">إجمالي المرات: ${subHabitTotalCount}</p>
+                                </div>
+                                <button class="add-habit-log-btn w-12 h-12 bg-accent-color text-accent-text rounded-full flex items-center justify-center text-3xl font-light shadow-lg hover:bg-opacity-80 transition-transform transform hover:scale-105" data-subhabit-id="${sh.id}">+</button>
+                            </div>
+                            `
+                        }).join('')}
+                    </div>
+                    `;
+                } else {
+                    mainContent = `
+                    <div class="flex justify-center">
+                        <button class="add-habit-log-btn w-24 h-24 bg-accent-color text-accent-text rounded-full flex items-center justify-center text-5xl font-light shadow-lg hover:bg-opacity-80 transition-transform transform hover:scale-105">+</button>
+                    </div>
+                    <div class="text-center md:text-right space-y-2">
+                        <div class="p-2 bg-primary-bg rounded-md"><p class="text-sm text-secondary-text">هذا الأسبوع</p><p class="text-2xl font-bold">${countThisWeek}</p></div>
+                        <div class="p-2 bg-primary-bg rounded-md"><p class="text-sm text-secondary-text">هذا الشهر</p><p class="text-2xl font-bold">${countThisMonth}</p></div>
+                        <div class="p-2 bg-primary-bg rounded-md"><p class="text-sm text-secondary-text">إجمالي المرات</p><p class="text-2xl font-bold">${(habit.log || []).length}</p></div>
+                    </div>
+                    `;
+                }
+
+                return `
+                <div class="habit-item bg-secondary-bg p-4 rounded-lg shadow-sm" data-habit-id="${habit.id}" data-habit-type="counter" data-filter="${filter}">
+                    <div class="flex justify-between items-start">
+                        <div><h3 class="font-bold text-lg">${habit.title}</h3><p class="text-sm text-secondary-text">${habit.description}</p></div>
+                        <div class="flex items-center gap-3 text-secondary-text">
+                            <button class="edit-habit-btn text-sm hover:text-accent-color"><i class="fas fa-edit"></i></button>
+                            <button class="delete-habit-btn text-sm hover:text-danger-color"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                        ${mainContent}
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-border-color">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="font-bold">السجل (${title}: ${totalCount})</h4>
+                            <select class="habit-filter-select bg-primary-bg border border-border-color rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-accent-color focus:outline-none">
+                                <option value="this-month" ${filter === 'this-month' ? 'selected' : ''}>هذا الشهر</option>
+                                <option value="this-week" ${filter === 'this-week' ? 'selected' : ''}>هذا الأسبوع</option>
+                                <option value="all-time" ${filter === 'all-time' ? 'selected' : ''}>كل الأوقات</option>
+                                <optgroup label="أشهر أخرى">
+                                    ${sortedMonthOptions.map(m => `<option value="${m}" ${filter === m ? 'selected' : ''}>${monthNames[parseInt(m.split('-')[1])-1]} ${m.split('-')[0]}</option>`).join('')}
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="history-log max-h-48 overflow-y-auto space-y-1 pr-2">
+                            ${filteredTimestamps.length > 0 ? filteredTimestamps.sort((a,b) => b.date - a.date).map(entry => {
+                                const subHabit = habit.subHabits.find(sh => sh.id === entry.subHabitId);
+                                const subHabitTitle = subHabit ? `<span class="font-semibold text-accent-color/80"> - ${subHabit.title}</span>` : '';
+                                return `<p class="text-sm text-secondary-text p-1.5 bg-primary-bg rounded-md">${entry.date.toLocaleString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${subHabitTitle}</p>`
+                            }).join('') : '<p class="text-sm text-secondary-text text-center py-4">لا يوجد سجل لهذه الفترة.</p>'}
+                        </div>
+                    </div>
+                </div>`;
+            },
+            
             handleHabitClick(e) {
                 const habitItem = e.target.closest('.habit-item');
                 if (!habitItem) return;
                 const habitId = habitItem.dataset.habitId;
+                const habitType = habitItem.dataset.habitType;
                 let updatedHabit = null;
 
-                const subHabitLabel = e.target.closest('.subhabit-label');
-                const completeHabitLabel = e.target.closest('.complete-habit-label');
+                if (habitType === 'daily') {
+                    if (e.target.closest('.subhabit-label')) {
+                        updatedHabit = this.toggleSubHabit(habitId, e.target.closest('.subhabit-label').dataset.subhabitId);
+                    } else if (e.target.closest('.complete-habit-label')) {
+                        updatedHabit = this.toggleSimpleHabit(habitId);
+                    }
+                } else if (habitType === 'counter') {
+                    const btn = e.target.closest('.add-habit-log-btn');
+                    if (btn) {
+                        const subHabitId = btn.dataset.subhabitId;
+                        updatedHabit = this.logHabitTimestamp(habitId, subHabitId);
+                    } else if (e.target.matches('.habit-filter-select')) {
+                        const newFilter = e.target.value;
+                        const habit = this.state.habits.find(h => h.id === habitId);
+                        if (habit) habitItem.outerHTML = this.renderCounterHabitItem(habit, newFilter);
+                        return;
+                    }
+                }
 
-                if (subHabitLabel) {
-                    updatedHabit = this.toggleSubHabit(habitId, subHabitLabel.dataset.subhabitId);
-                } else if (completeHabitLabel) {
-                    updatedHabit = this.toggleSimpleHabit(habitId);
-                } else if (e.target.closest('.edit-habit-btn')) {
+                if (e.target.closest('.edit-habit-btn')) {
                     this.showHabitModal(habitId);
                 } else if (e.target.closest('.delete-habit-btn')) {
                     this.showConfirmation('هل أنت متأكد من حذف هذه العادة وكل سجلها؟', () => this.deleteHabit(habitId));
                 }
 
                 if (updatedHabit) {
-                    habitItem.outerHTML = this.renderHabitItem(updatedHabit);
+                    const currentFilter = habitItem.dataset.filter;
+                    habitItem.outerHTML = habitType === 'counter' 
+                        ? this.renderCounterHabitItem(updatedHabit, currentFilter) 
+                        : this.renderDailyHabitItem(updatedHabit);
                 }
+            },
+            
+            logHabitTimestamp(habitId, subHabitId = null) {
+                const habit = this.state.habits.find(h => h.id === habitId);
+                if (habit && habit.type === 'counter') {
+                    if (!Array.isArray(habit.log)) habit.log = [];
+                    if (habit.subHabits && habit.subHabits.length > 0 && !subHabitId) {
+                        console.warn("Subhabit ID is required for this counter habit.");
+                        return null;
+                    }
+                    habit.log.push({ 
+                        timestamp: new Date().toISOString(), 
+                        subHabitId: subHabitId || habit.id 
+                    });
+                    this.saveState();
+                    return habit;
+                }
+                return null;
             },
 
             showHabitModal(habitId = null) {
@@ -599,10 +785,20 @@
                     <form id="habit-form" class="p-6 space-y-4">
                         <h3 class="text-xl font-bold">${habit ? 'تعديل العادة' : 'عادة جديدة'}</h3>
                         <input type="hidden" name="id" value="${habit?.id || ''}">
-                        <div><label class="block text-sm font-medium text-secondary-text">عنوان العادة الرئيسية</label><input type="text" name="title" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${habit?.title || ''}" required></div>
-                        <div><label class="block text-sm font-medium text-secondary-text">الوصف</label><textarea name="description" rows="2" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${habit?.description || ''}</textarea></div>
+                        
                         <div>
-                            <label class="block text-sm font-medium text-secondary-text">العادات الفرعية (اتركه فارغاً لعادَة بسيطة)</label>
+                            <label class="block text-sm font-medium text-secondary-text">نوع العادة</label>
+                            <div class="mt-2 grid grid-cols-2 gap-3">
+                                <label class="flex items-center justify-center p-3 bg-primary-bg border border-border-color rounded-lg cursor-pointer has-[:checked]:bg-accent-color has-[:checked]:text-accent-text has-[:checked]:border-accent-color"><input type="radio" name="type" value="daily" class="sr-only" ${(!habit || habit.type === 'daily') ? 'checked' : ''}><span class="text-sm font-medium">إنجاز يومي</span></label>
+                                <label class="flex items-center justify-center p-3 bg-primary-bg border border-border-color rounded-lg cursor-pointer has-[:checked]:bg-accent-color has-[:checked]:text-accent-text has-[:checked]:border-accent-color"><input type="radio" name="type" value="counter" class="sr-only" ${habit?.type === 'counter' ? 'checked' : ''}><span class="text-sm font-medium">عداد (+)</span></label>
+                            </div>
+                        </div>
+
+                        <div><label class="block text-sm font-medium text-secondary-text">عنوان العادة</label><input type="text" name="title" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${habit?.title || ''}" required></div>
+                        <div><label class="block text-sm font-medium text-secondary-text">الوصف</label><textarea name="description" rows="2" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${habit?.description || ''}</textarea></div>
+                        
+                        <div id="subhabits-section">
+                            <label class="block text-sm font-medium text-secondary-text">العادات الفرعية (اختياري)</label>
                             <div id="subhabits-container" class="space-y-2 mt-1">${(habit?.subHabits || []).map(sh => this.renderSubHabitInput(sh)).join('')}</div>
                             <button type="button" id="add-subhabit-btn" class="text-sm text-accent-color mt-2"><i class="fas fa-plus"></i> إضافة عادة فرعية</button>
                         </div>
@@ -632,7 +828,12 @@
             },
 
             createHabit(data) {
-                const newHabit = { id: Date.now().toString(), title: data.title, description: data.description, subHabits: data.subHabits || [], log: {} };
+                const habitType = data.type;
+                const newHabit = { 
+                    id: Date.now().toString(), title: data.title, description: data.description, type: habitType,
+                    subHabits: data.subHabits || [], 
+                    log: habitType === 'daily' ? {} : [] 
+                };
                 this.state.habits.push(newHabit);
                 this.saveState(); this.renderHabits(); this.showToast('تمت إضافة العادة بنجاح.');
             },
@@ -640,8 +841,16 @@
             updateHabit(data) {
                 const habitIndex = this.state.habits.findIndex(h => h.id === data.id);
                 if (habitIndex > -1) {
-                    const existingLog = this.state.habits[habitIndex].log;
-                    this.state.habits[habitIndex] = { ...this.state.habits[habitIndex], title: data.title, description: data.description, subHabits: data.subHabits, log: existingLog };
+                    const habitType = data.type;
+                    const oldHabit = this.state.habits[habitIndex];
+                    this.state.habits[habitIndex] = { 
+                        ...oldHabit, 
+                        title: data.title, 
+                        description: data.description, 
+                        type: habitType,
+                        subHabits: data.subHabits,
+                        log: oldHabit.type === habitType ? oldHabit.log : (habitType === 'daily' ? {} : [])
+                    };
                     this.saveState(); this.renderHabits(); this.showToast('تم تحديث العادة بنجاح.');
                 }
             },
@@ -655,7 +864,7 @@
                 const habit = this.state.habits.find(h => h.id === habitId);
                 if (!habit) return null;
                 const today = new Date().toISOString().split('T')[0];
-                if (!habit.log) habit.log = {};
+                if (typeof habit.log !== 'object' || Array.isArray(habit.log)) habit.log = {};
                 if (!habit.log[today]) habit.log[today] = {};
                 if (habit.log[today][subHabitId]) delete habit.log[today][subHabitId]; else habit.log[today][subHabitId] = true;
                 this.saveState();
@@ -666,7 +875,7 @@
                 const habit = this.state.habits.find(h => h.id === habitId);
                 if (!habit) return null;
                 const today = new Date().toISOString().split('T')[0];
-                if (!habit.log) habit.log = {};
+                if (typeof habit.log !== 'object' || Array.isArray(habit.log)) habit.log = {};
                 if (!habit.log[today]) habit.log[today] = {};
                 if (habit.log[today][habit.id]) delete habit.log[today][habit.id]; else habit.log[today][habit.id] = true;
                 this.saveState();
@@ -696,31 +905,9 @@
                     type: 'pie',
                     data: {
                         labels: ['المهام المكتملة', 'المهام غير المكتملة'],
-                        datasets: [{
-                            label: 'حالة المهام',
-                            data: [completedTasks, incompleteTasks],
-                            backgroundColor: [
-                                'rgba(16, 185, 129, 0.7)',
-                                'rgba(239, 68, 68, 0.7)'
-                            ],
-                            borderColor: [
-                                'rgba(16, 185, 129, 1)',
-                                'rgba(239, 68, 68, 1)'
-                            ],
-                            borderWidth: 1
-                        }]
+                        datasets: [{ data: [completedTasks, incompleteTasks], backgroundColor: ['rgba(16, 185, 129, 0.7)', 'rgba(239, 68, 68, 0.7)'], borderColor: ['rgba(16, 185, 129, 1)', 'rgba(239, 68, 68, 1)'], borderWidth: 1 }]
                     },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            },
-                            title: {
-                                display: false,
-                            }
-                        }
-                    }
+                    options: { responsive: true, plugins: { legend: { position: 'top' } } }
                 });
             },
             
@@ -733,16 +920,17 @@
 
             renderHabitsChart() {
                 const ctx = document.getElementById('habits-chart').getContext('2d');
-                const habitData = this.state.habits.map(habit => {
+                // Filter only daily habits for this chart
+                const dailyHabits = this.state.habits.filter(h => h.type === 'daily' || !h.type);
+                const habitData = dailyHabits.map(habit => {
                     let totalPercentage = 0;
                     for (let i = 0; i < 7; i++) {
                         const date = new Date(); date.setDate(date.getDate() - i);
                         const dateString = date.toISOString().split('T')[0];
-                        const dayLog = habit.log ? habit.log[dateString] : null;
+                        const dayLog = habit.log && habit.log[dateString] ? habit.log[dateString] : null;
                         if (dayLog) {
                             if (habit.subHabits.length > 0) {
-                                const completed = habit.subHabits.filter(sh => dayLog[sh.id]).length;
-                                totalPercentage += (completed / habit.subHabits.length) * 100;
+                                totalPercentage += (Object.keys(dayLog).length / habit.subHabits.length) * 100;
                             } else if (dayLog[habit.id]) {
                                 totalPercentage += 100;
                             }
@@ -878,5 +1066,3 @@
     
 </body>
 </html>
-
-
