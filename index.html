@@ -134,6 +134,9 @@
                 activeView: 'dashboard',
                 filter: { tasks: { query: '', priority: 'all', status: 'all' } }
             },
+            
+            // Runtime state for notifications, not saved to localStorage
+            scheduledNotifications: {},
 
             init() {
                 this.loadState();
@@ -141,8 +144,70 @@
                 this.render();
                 this.applyTheme();
                 this.boundHabitClickHandler = this.handleHabitClick.bind(this);
+                
+                // Initialize notification features
+                this.requestNotificationPermission();
+                this.scheduleAllTaskNotifications();
             },
 
+            // --- NOTIFICATION LOGIC ---
+            requestNotificationPermission() {
+                if (!("Notification" in window)) {
+                    console.log("This browser does not support desktop notifications.");
+                    return;
+                }
+                if (Notification.permission !== "denied") {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === "granted") {
+                            this.showToast('تم تفعيل الإشعارات بنجاح!');
+                        }
+                    });
+                }
+            },
+
+            scheduleAllTaskNotifications() {
+                this.state.tasks.forEach(task => {
+                    if (!task.completed) {
+                        this.scheduleNotification(task);
+                    }
+                });
+            },
+            
+            cancelNotification(taskId) {
+                if (this.scheduledNotifications[taskId]) {
+                    clearTimeout(this.scheduledNotifications[taskId]);
+                    delete this.scheduledNotifications[taskId];
+                }
+            },
+
+            scheduleNotification(task) {
+                this.cancelNotification(task.id); // Clear any old notification for this task
+
+                if (task.completed || !task.dueDate || !task.dueTime) {
+                    return;
+                }
+
+                const dueDateTime = new Date(`${task.dueDate}T${task.dueTime}`);
+                const now = new Date();
+                const delay = dueDateTime.getTime() - now.getTime();
+
+                if (delay > 0) {
+                    const timeoutId = setTimeout(() => {
+                        if (Notification.permission === "granted") {
+                            new Notification("حان وقت المهمة!", {
+                                body: task.title,
+                                icon: "https://placehold.co/192x192/4a90e2/ffffff?text=Tasks",
+                                lang: 'ar',
+                                dir: 'rtl'
+                            });
+                        }
+                        delete this.scheduledNotifications[task.id];
+                    }, delay);
+                    this.scheduledNotifications[task.id] = timeoutId;
+                }
+            },
+
+            // --- CORE APP LOGIC ---
             loadState() {
                 const savedState = localStorage.getItem('taskManagerData');
                 if (savedState) {
@@ -260,12 +325,13 @@
 
             renderDashboardTaskItem(task) {
                 const priorityClasses = { high: 'border-r-4 border-red-500', medium: 'border-r-4 border-yellow-500', low: 'border-r-4 border-blue-500' };
+                const dueTime = task.dueTime ? ` - ${new Date(`1970-01-01T${task.dueTime}`).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit' })}` : '';
                  return `
                     <div class="dashboard-task-item flex items-start gap-3 p-2 bg-primary-bg rounded-lg ${priorityClasses[task.priority] || ''}" data-task-id="${task.id}">
                         <input type="checkbox" class="task-checkbox mt-1 h-5 w-5 rounded text-accent-color focus:ring-accent-color">
                         <div class="flex-grow">
                              <p class="font-semibold">${task.title}</p>
-                             <p class="text-xs text-secondary-text">الاستحقاق: ${task.dueDate}</p>
+                             <p class="text-xs text-secondary-text">الاستحقاق: ${task.dueDate}${dueTime}</p>
                         </div>
                     </div>
                  `;
@@ -396,6 +462,7 @@
                 const priorityClasses = { high: 'border-r-4 border-red-500', medium: 'border-r-4 border-yellow-500', low: 'border-r-4 border-blue-500' };
                 const completedSubtasks = task.subtasks.filter(st => st.completed).length;
                 const progress = task.subtasks.length > 0 ? (completedSubtasks / task.subtasks.length) * 100 : (task.completed ? 100 : 0);
+                const dueTime = task.dueTime ? ` - ${new Date(`1970-01-01T${task.dueTime}`).toLocaleTimeString('ar-SA', { hour: 'numeric', minute: '2-digit' })}` : '';
                 return `
                     <div class="task-item bg-secondary-bg p-3 rounded-lg shadow-sm flex flex-col gap-2 transition-all hover:shadow-md ${priorityClasses[task.priority] || ''} ${task.completed ? 'opacity-50' : ''}" data-task-id="${task.id}">
                         <div class="flex items-start gap-4">
@@ -409,7 +476,7 @@
                                         <button class="delete-task-btn text-sm hover:text-danger-color"><i class="fas fa-trash"></i></button>
                                     </div>
                                 </div>
-                                <p class="text-xs text-secondary-text mt-1">تاريخ الاستحقاق: ${task.dueDate}</p>
+                                <p class="text-xs text-secondary-text mt-1">تاريخ الاستحقاق: ${task.dueDate}${dueTime}</p>
                                 ${task.subtasks.length > 0 ? `<div class="mt-2"><progress class="w-full h-1.5 rounded-full" value="${progress}" max="100"></progress><p class="text-xs text-secondary-text">${completedSubtasks} / ${task.subtasks.length} مهام فرعية</p></div>` : ''}
                             </div>
                         </div>
@@ -461,9 +528,12 @@
                         <div><label class="block text-sm font-medium text-secondary-text">عنوان المهمة</label><input type="text" name="title" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-accent-color focus:border-accent-color" value="${task?.title || ''}" required></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label class="block text-sm font-medium text-secondary-text">تاريخ الاستحقاق</label><input type="date" name="dueDate" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${task?.dueDate || new Date().toISOString().split('T')[0]}" required></div>
-                            <div><label class="block text-sm font-medium text-secondary-text">الأولوية</label><select name="priority" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${['low', 'medium', 'high'].map(p => `<option value="${p}" ${task?.priority === p ? 'selected' : ''}>${{low: 'عادي', medium: 'متوسط', high: 'هام'}[p]}</option>`).join('')}</select></div>
+                            <div><label class="block text-sm font-medium text-secondary-text">وقت الاستحقاق (للتنبيه)</label><input type="time" name="dueTime" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${task?.dueTime || ''}"></div>
                         </div>
-                        <div><label class="block text-sm font-medium text-secondary-text">الفئة</label><select name="categoryId" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${this.state.categories.map(c => `<option value="${c.id}" ${task?.categoryId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="block text-sm font-medium text-secondary-text">الأولوية</label><select name="priority" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${['low', 'medium', 'high'].map(p => `<option value="${p}" ${task?.priority === p ? 'selected' : ''}>${{low: 'عادي', medium: 'متوسط', high: 'هام'}[p]}</option>`).join('')}</select></div>
+                            <div><label class="block text-sm font-medium text-secondary-text">الفئة</label><select name="categoryId" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${this.state.categories.map(c => `<option value="${c.id}" ${task?.categoryId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
+                        </div>
                         <div><label class="block text-sm font-medium text-secondary-text">ملاحظات</label><textarea name="notes" rows="3" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${task?.notes || ''}</textarea></div>
                         <div>
                             <label class="block text-sm font-medium text-secondary-text">مهام فرعية</label>
@@ -503,10 +573,11 @@
 
             createTask(data) {
                 const newTask = {
-                    id: Date.now().toString(), title: data.title, dueDate: data.dueDate, priority: data.priority, categoryId: parseInt(data.categoryId),
+                    id: Date.now().toString(), title: data.title, dueDate: data.dueDate, dueTime: data.dueTime, priority: data.priority, categoryId: parseInt(data.categoryId),
                     notes: data.notes, completed: false, completionDate: null, subtasks: data.subtasks || []
                 };
                 this.state.tasks.push(newTask);
+                this.scheduleNotification(newTask);
                 this.saveState(); this.renderTasks(); this.showToast('تمت إضافة المهمة بنجاح.');
             },
             
@@ -514,11 +585,13 @@
                 const taskIndex = this.state.tasks.findIndex(t => t.id === data.id);
                 if (taskIndex > -1) {
                     this.state.tasks[taskIndex] = { ...this.state.tasks[taskIndex], ...data, categoryId: parseInt(data.categoryId) };
+                    this.scheduleNotification(this.state.tasks[taskIndex]);
                     this.saveState(); this.renderTasks(); this.showToast('تم تحديث المهمة بنجاح.');
                 }
             },
 
             deleteTask(taskId) {
+                this.cancelNotification(taskId);
                 this.state.tasks = this.state.tasks.filter(t => t.id !== taskId);
                 this.saveState(); this.renderTasks(); this.showToast('تم حذف المهمة.');
             },
@@ -529,6 +602,13 @@
                     task.completed = !task.completed;
                     task.completionDate = task.completed ? new Date().toISOString().split('T')[0] : null;
                     task.subtasks.forEach(st => st.completed = task.completed);
+                    
+                    if (task.completed) {
+                        this.cancelNotification(task.id);
+                    } else {
+                        this.scheduleNotification(task);
+                    }
+                    
                     this.saveState();
                     return task;
                 }
@@ -540,8 +620,17 @@
                 if (task) {
                     const subtask = task.subtasks.find(st => st.id.toString() === subtaskId);
                     if(subtask) subtask.completed = !subtask.completed;
-                    task.completed = task.subtasks.every(st => st.completed);
-                    if (task.completed) task.completionDate = new Date().toISOString().split('T')[0]; else task.completionDate = null;
+                    const allSubtasksCompleted = task.subtasks.every(st => st.completed);
+                    if (task.completed !== allSubtasksCompleted) {
+                        task.completed = allSubtasksCompleted;
+                        if (task.completed) {
+                           task.completionDate = new Date().toISOString().split('T')[0];
+                           this.cancelNotification(task.id);
+                        } else {
+                           task.completionDate = null;
+                           this.scheduleNotification(task);
+                        }
+                    }
                     this.saveState();
                     return task;
                 }
