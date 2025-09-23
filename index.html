@@ -145,9 +145,8 @@
                 this.applyTheme();
                 this.boundHabitClickHandler = this.handleHabitClick.bind(this);
                 
-                // Initialize notification features
                 this.requestNotificationPermission();
-                this.scheduleAllTaskNotifications();
+                this.scheduleAllReminders();
             },
 
             // --- NOTIFICATION LOGIC ---
@@ -156,55 +155,79 @@
                     console.log("This browser does not support desktop notifications.");
                     return;
                 }
-                if (Notification.permission !== "denied") {
+                if (Notification.permission === 'default') {
                     Notification.requestPermission().then(permission => {
                         if (permission === "granted") {
                             this.showToast('تم تفعيل الإشعارات بنجاح!');
+                        } else {
+                            this.showToast('تم رفض إذن الإشعارات.', 'error');
                         }
                     });
                 }
             },
 
-            scheduleAllTaskNotifications() {
+            scheduleAllReminders() {
                 this.state.tasks.forEach(task => {
                     if (!task.completed) {
-                        this.scheduleNotification(task);
+                        this.scheduleRemindersForTask(task);
                     }
                 });
             },
             
-            cancelNotification(taskId) {
+            cancelAllRemindersForTask(taskId) {
                 if (this.scheduledNotifications[taskId]) {
-                    clearTimeout(this.scheduledNotifications[taskId]);
+                    this.scheduledNotifications[taskId].forEach(timeoutId => clearTimeout(timeoutId));
                     delete this.scheduledNotifications[taskId];
                 }
             },
 
-            scheduleNotification(task) {
-                this.cancelNotification(task.id); // Clear any old notification for this task
+            scheduleRemindersForTask(task) {
+                this.cancelAllRemindersForTask(task.id); 
 
-                if (task.completed || !task.dueDate || !task.dueTime) {
+                if (task.completed || !task.dueDate || !task.dueTime || !task.reminders || task.reminders.length === 0) {
                     return;
                 }
 
                 const dueDateTime = new Date(`${task.dueDate}T${task.dueTime}`);
+                this.scheduledNotifications[task.id] = [];
                 const now = new Date();
-                const delay = dueDateTime.getTime() - now.getTime();
 
-                if (delay > 0) {
-                    const timeoutId = setTimeout(() => {
-                        if (Notification.permission === "granted") {
-                            new Notification("حان وقت المهمة!", {
-                                body: task.title,
-                                icon: "https://placehold.co/192x192/4a90e2/ffffff?text=Tasks",
-                                lang: 'ar',
-                                dir: 'rtl'
-                            });
-                        }
-                        delete this.scheduledNotifications[task.id];
-                    }, delay);
-                    this.scheduledNotifications[task.id] = timeoutId;
-                }
+                task.reminders.forEach(reminder => {
+                    let reminderDateTime = new Date(dueDateTime.getTime());
+                    const value = parseInt(reminder.value, 10);
+                    const unit = reminder.unit;
+                    
+                    if (isNaN(value)) return;
+
+                    let reminderText = `تذكير: ${value} ${
+                        {minutes: 'دقيقة', hours: 'ساعة', days: 'يوم', weeks: 'أسبوع'}[unit]
+                    } قبل موعد "${task.title}"`;
+
+                    switch (unit) {
+                        case 'minutes': reminderDateTime.setMinutes(reminderDateTime.getMinutes() - value); break;
+                        case 'hours':   reminderDateTime.setHours(reminderDateTime.getHours() - value);   break;
+                        case 'days':    reminderDateTime.setDate(reminderDateTime.getDate() - value);     break;
+                        case 'weeks':   reminderDateTime.setDate(reminderDateTime.getDate() - (value * 7)); break;
+                    }
+
+                    const delay = reminderDateTime.getTime() - now.getTime();
+
+                    if (delay > 0) {
+                        const timeoutId = setTimeout(() => {
+                            if (Notification.permission === "granted") {
+                                const notification = new Notification("اقترب موعد المهمة!", {
+                                    body: reminderText,
+                                    icon: "https://placehold.co/192x192/4a90e2/ffffff?text=Tasks",
+                                    lang: 'ar',
+                                    dir: 'rtl',
+                                    vibrate: [200, 100, 200], // Vibration pattern
+                                    silent: false // Explicitly request sound
+                                });
+                            }
+                        }, delay);
+                        this.scheduledNotifications[task.id].push(timeoutId);
+                    }
+                });
             },
 
             // --- CORE APP LOGIC ---
@@ -528,35 +551,53 @@
                         <div><label class="block text-sm font-medium text-secondary-text">عنوان المهمة</label><input type="text" name="title" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-accent-color focus:border-accent-color" value="${task?.title || ''}" required></div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label class="block text-sm font-medium text-secondary-text">تاريخ الاستحقاق</label><input type="date" name="dueDate" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${task?.dueDate || new Date().toISOString().split('T')[0]}" required></div>
-                            <div><label class="block text-sm font-medium text-secondary-text">وقت الاستحقاق (للتنبيه)</label><input type="time" name="dueTime" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${task?.dueTime || ''}"></div>
+                            <div><label class="block text-sm font-medium text-secondary-text">وقت الاستحقاق</label><input type="time" name="dueTime" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3" value="${task?.dueTime || ''}" required></div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label class="block text-sm font-medium text-secondary-text">الأولوية</label><select name="priority" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${['low', 'medium', 'high'].map(p => `<option value="${p}" ${task?.priority === p ? 'selected' : ''}>${{low: 'عادي', medium: 'متوسط', high: 'هام'}[p]}</option>`).join('')}</select></div>
                             <div><label class="block text-sm font-medium text-secondary-text">الفئة</label><select name="categoryId" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${this.state.categories.map(c => `<option value="${c.id}" ${task?.categoryId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>
                         </div>
-                        <div><label class="block text-sm font-medium text-secondary-text">ملاحظات</label><textarea name="notes" rows="3" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${task?.notes || ''}</textarea></div>
+                        <div><label class="block text-sm font-medium text-secondary-text">ملاحظات</label><textarea name="notes" rows="2" class="mt-1 block w-full bg-primary-bg border border-border-color rounded-md shadow-sm py-2 px-3">${task?.notes || ''}</textarea></div>
                         <div>
                             <label class="block text-sm font-medium text-secondary-text">مهام فرعية</label>
                             <div id="subtasks-container" class="space-y-2 mt-1">${(task?.subtasks || []).map(st => this.renderSubtaskInput(st)).join('')}</div>
                             <button type="button" id="add-subtask-btn" class="text-sm text-accent-color mt-2"><i class="fas fa-plus"></i> إضافة مهمة فرعية</button>
                         </div>
-                        <div class="flex justify-end gap-3 pt-4">
+                         <div>
+                            <label class="block text-sm font-medium text-secondary-text">التذكيرات</label>
+                            <div id="reminders-container" class="space-y-2 mt-1">${(task?.reminders || []).map(r => this.renderReminderInput(r)).join('')}</div>
+                            <button type="button" id="add-reminder-btn" class="text-sm text-accent-color mt-2"><i class="fas fa-bell"></i> إضافة تذكير</button>
+                        </div>
+                        <div class="flex justify-end gap-3 pt-4 border-t border-border-color">
                             <button type="button" class="modal-close-btn px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg">إلغاء</button>
                             <button type="submit" class="px-4 py-2 bg-accent-color text-accent-text rounded-lg">حفظ</button>
                         </div>
                     </form>`;
                 this.showModal();
+
                 document.getElementById('add-subtask-btn').addEventListener('click', () => { document.getElementById('subtasks-container').insertAdjacentHTML('beforeend', this.renderSubtaskInput()); });
                 document.getElementById('subtasks-container').addEventListener('click', e => { if (e.target.closest('.remove-subtask-btn')) e.target.closest('.subtask-input-group').remove(); });
+                
+                document.getElementById('add-reminder-btn').addEventListener('click', () => { document.getElementById('reminders-container').insertAdjacentHTML('beforeend', this.renderReminderInput()); });
+                document.getElementById('reminders-container').addEventListener('click', e => { if (e.target.closest('.remove-reminder-btn')) e.target.closest('.reminder-input-group').remove(); });
+                
                 document.getElementById('task-form').addEventListener('submit', e => {
                     e.preventDefault();
                     const formData = new FormData(e.target);
                     const taskData = Object.fromEntries(formData.entries());
+                    
                     taskData.subtasks = Array.from(document.querySelectorAll('.subtask-input-group')).map(group => ({
                         id: group.dataset.subtaskId || Date.now() + Math.random(),
                         title: group.querySelector('input[name="subtask-title"]').value,
                         completed: group.querySelector('input[type="checkbox"]').checked
                     })).filter(st => st.title);
+
+                    taskData.reminders = Array.from(document.querySelectorAll('.reminder-input-group')).map(group => ({
+                        id: group.dataset.reminderId || Date.now() + Math.random(),
+                        value: group.querySelector('input[name="reminder-value"]').value,
+                        unit: group.querySelector('select[name="reminder-unit"]').value
+                    })).filter(r => r.value);
+
                     if (taskData.id) this.updateTask(taskData); else this.createTask(taskData);
                     this.hideModal();
                 });
@@ -570,14 +611,32 @@
                     <button type="button" class="remove-subtask-btn text-danger-color"><i class="fas fa-times"></i></button>
                 </div>`;
             },
+            
+            renderReminderInput(reminder = { id: '', value: '10', unit: 'minutes' }) {
+                return `
+                <div class="reminder-input-group flex items-center gap-2" data-reminder-id="${reminder.id}">
+                    <span class="text-sm">تذكير قبل</span>
+                    <input type="number" name="reminder-value" min="1" class="w-16 bg-primary-bg border-b border-border-color focus:outline-none text-center" value="${reminder.value}">
+                    <select name="reminder-unit" class="bg-primary-bg border-b border-border-color focus:outline-none">
+                        <option value="minutes" ${reminder.unit === 'minutes' ? 'selected' : ''}>دقيقة</option>
+                        <option value="hours" ${reminder.unit === 'hours' ? 'selected' : ''}>ساعة</option>
+                        <option value="days" ${reminder.unit === 'days' ? 'selected' : ''}>يوم</option>
+                        <option value="weeks" ${reminder.unit === 'weeks' ? 'selected' : ''}>أسبوع</option>
+                    </select>
+                    <button type="button" class="remove-reminder-btn text-danger-color ml-auto"><i class="fas fa-times"></i></button>
+                </div>`;
+            },
 
             createTask(data) {
                 const newTask = {
-                    id: Date.now().toString(), title: data.title, dueDate: data.dueDate, dueTime: data.dueTime, priority: data.priority, categoryId: parseInt(data.categoryId),
-                    notes: data.notes, completed: false, completionDate: null, subtasks: data.subtasks || []
+                    id: Date.now().toString(),
+                    ...data,
+                    categoryId: parseInt(data.categoryId),
+                    completed: false, 
+                    completionDate: null
                 };
                 this.state.tasks.push(newTask);
-                this.scheduleNotification(newTask);
+                this.scheduleRemindersForTask(newTask);
                 this.saveState(); this.renderTasks(); this.showToast('تمت إضافة المهمة بنجاح.');
             },
             
@@ -585,13 +644,13 @@
                 const taskIndex = this.state.tasks.findIndex(t => t.id === data.id);
                 if (taskIndex > -1) {
                     this.state.tasks[taskIndex] = { ...this.state.tasks[taskIndex], ...data, categoryId: parseInt(data.categoryId) };
-                    this.scheduleNotification(this.state.tasks[taskIndex]);
+                    this.scheduleRemindersForTask(this.state.tasks[taskIndex]);
                     this.saveState(); this.renderTasks(); this.showToast('تم تحديث المهمة بنجاح.');
                 }
             },
 
             deleteTask(taskId) {
-                this.cancelNotification(taskId);
+                this.cancelAllRemindersForTask(taskId);
                 this.state.tasks = this.state.tasks.filter(t => t.id !== taskId);
                 this.saveState(); this.renderTasks(); this.showToast('تم حذف المهمة.');
             },
@@ -604,9 +663,9 @@
                     task.subtasks.forEach(st => st.completed = task.completed);
                     
                     if (task.completed) {
-                        this.cancelNotification(task.id);
+                        this.cancelAllRemindersForTask(task.id);
                     } else {
-                        this.scheduleNotification(task);
+                        this.scheduleRemindersForTask(task);
                     }
                     
                     this.saveState();
@@ -625,10 +684,10 @@
                         task.completed = allSubtasksCompleted;
                         if (task.completed) {
                            task.completionDate = new Date().toISOString().split('T')[0];
-                           this.cancelNotification(task.id);
+                           this.cancelAllRemindersForTask(task.id);
                         } else {
                            task.completionDate = null;
-                           this.scheduleNotification(task);
+                           this.scheduleRemindersForTask(task);
                         }
                     }
                     this.saveState();
@@ -1155,3 +1214,4 @@
     
 </body>
 </html>
+
