@@ -963,7 +963,7 @@
                     const formData = new FormData(e.target);
                     const habitData = Object.fromEntries(formData.entries());
                     habitData.subHabits = Array.from(document.querySelectorAll('.subhabit-input-group')).map(group => ({
-                        id: group.dataset.subhabitId || Date.now() + Math.random(),
+                        id: group.dataset.subhabitId || (Date.now() + Math.random()).toString(),
                         title: group.querySelector('input[name="subhabit-title"]').value
                     })).filter(sh => sh.title);
                     if (habitData.id) this.updateHabit(habitData); else this.createHabit(habitData);
@@ -1214,4 +1214,6 @@
     
 </body>
 </html>
+
+
 
